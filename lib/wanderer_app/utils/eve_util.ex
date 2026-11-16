@@ -48,10 +48,19 @@ defmodule WandererApp.Utils.EVEUtil do
     end
   end
 
-  defp get_connection_size_status(5_000_000), do: Connections.small_ship_size()
-  defp get_connection_size_status(62_000_000), do: Connections.medium_ship_size()
-  defp get_connection_size_status(375_000_000), do: Connections.large_ship_size()
-  defp get_connection_size_status(1_000_000_000), do: Connections.freight_ship_size()
-  defp get_connection_size_status(2_000_000_000), do: Connections.capital_ship_size()
-  defp get_connection_size_status(_max_mass_per_jump), do: Connections.large_ship_size()
+  # The size is the largest ship class that fits through the hole, so a mass between two
+  # classes rounds down (e.g. 450M: battleships fit, freighters do not).
+  defp get_connection_size_status(mass) when mass >= 2_000_000_000,
+    do: Connections.capital_ship_size()
+
+  defp get_connection_size_status(mass) when mass >= 1_000_000_000,
+    do: Connections.freight_ship_size()
+
+  defp get_connection_size_status(mass) when mass >= 375_000_000,
+    do: Connections.large_ship_size()
+
+  defp get_connection_size_status(mass) when mass >= 62_000_000,
+    do: Connections.medium_ship_size()
+
+  defp get_connection_size_status(_mass), do: Connections.small_ship_size()
 end
