@@ -194,6 +194,10 @@ defmodule WandererApp.Kills.Client do
     # Cancel connection timeout if pending
     state = cancel_connection_timeout(state)
 
+    # Close the socket being dropped: forgetting its pid without stopping it leaves its
+    # WebSocket open, and the next connect opens another one.
+    disconnect_socket(state.socket_pid)
+
     state =
       %{state | connected: false, connecting: false, socket_pid: nil, last_error: reason}
 
@@ -223,6 +227,7 @@ defmodule WandererApp.Kills.Client do
 
           # Don't reset retry count during health check failures
           if state.connected or state.connecting do
+            disconnect_socket(state.socket_pid)
             send(self(), {:disconnected, :health_check_failed})
             %{state | connected: false, connecting: false, socket_pid: nil}
           else
@@ -238,6 +243,7 @@ defmodule WandererApp.Kills.Client do
           new_state = %{state | last_health_reconnect_attempt: System.system_time(:millisecond)}
 
           if state.connected or state.connecting do
+            disconnect_socket(state.socket_pid)
             send(self(), {:disconnected, :health_check_failed})
             %{new_state | connected: false, connecting: false, socket_pid: nil}
           else
@@ -251,6 +257,7 @@ defmodule WandererApp.Kills.Client do
           new_state = %{state | retry_count: 0, last_retry_cycle_end: nil}
 
           if state.connected or state.connecting do
+            disconnect_socket(state.socket_pid)
             send(self(), {:disconnected, :health_check_failed})
             %{new_state | connected: false, connecting: false, socket_pid: nil}
           else
@@ -582,8 +589,13 @@ defmodule WandererApp.Kills.Client do
 
   defp disconnect_socket(pid) when is_pid(pid) do
     if Process.alive?(pid) do
-      GenServer.stop(pid, :normal)
+      GenServer.stop(pid, :normal, 5000)
     end
+
+    :ok
+  catch
+    # Already gone, or did not stop in time
+    :exit, _ -> :ok
   end
 
   defp schedule_health_check do
